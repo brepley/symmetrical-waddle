@@ -1,0 +1,113 @@
+---
+title: "DataRichWorld-Challenge"
+output: html_document
+date: "2022-09-12"
+author:
+  name: Ben Epley
+  affiliation: University of Chicago
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# V. Programming Challenge
+## P-hacking COVID-19
+To show firsthand how p-hacking and overfitting are possible, we want you to show how these practices can lead to completely nonsensical results.
+
+You can download a complete list of data on COVID-19 (coronavirus) by Our World in Data (https://ourworldindata.org/coronavirus). The data is updated daily and contains the lastest publicly available data on COVID-19 by country and by date. The data report the total cases, new cases, total deaths, new deaths, and hospitalization data of 233 countries and regions. Note that you are not expected to analyze the entire data. You may choose one or a few countries, or select one or some dates for analysis or for comparison.
+
+The challenge is to build an analysis pipeline that produces a “significant” p-value for a relationship between COVID-19 cases and another variable, where the relationship is non-sensical, cannot possibly be causal, or could be argued either way. You may even simulate a fake variable as your key variable of interest. Prepare an Rmarkdown document with the results. At the end of the document write a paragraph to explain your “findings”. As if you were in a debate team, pick on a subjective conclusion, and “cherry-pick” partial data to support your claim. Provide a non-statistical explanation for your group’s fake result, and/or critique your statistcal approach and why your group got an apparently significant p-value.
+
+As an example, below on a particular date (02/26/2020), I found a positive relationship between handwashing facilities and new cases in Asia countries.
+
+Some sample code:
+```{r, eval=FALSE}
+library(dplyr)
+#read the Dataset sheet into “R”. The dataset will be called "data".
+data <- read.csv("BSD-QBio8/tutorials/stats_for_large_data/data/owid-covid-data.csv",
+     na.strings = "",header=T)
+
+
+res <- NULL
+for (i in 1:length(unique(data$date))){
+  data1 <- data[which((data$date==unique(data$date)[i])&(data$continent=="Asia")),]
+  data1 <- data1 %>% select("iso_code","date","new_cases", "handwashing_facilities")
+  if (sum(rowSums(!is.na(data1[,3:4]))==2)>=10){
+  res <- rbind(res, c(unique(data$date)[i],
+      cor.test(data1[,3],data1[,4])$estimate,
+      cor.test(data1[,3],data1[,4])$p.value))
+}}
+
+res[which((as.numeric(res[,2])>0)& (as.numeric(res[,3])<=0.05)),]
+```
+
+```{r}
+# Clear the global environment to prevent unintentional conflicts
+rm(list=ls())
+
+# Set the working directory
+setwd("/Users/epley/Desktop/RstatBos/R.workDirectory/uChicagoR/")
+library(dplyr)
+library(ggrepel)
+
+# Set a stable seed for reproducibility
+set.seed(79)
+
+# Read in the data
+df <- read.csv("BSD-QBio8/tutorials/stats_for_large_data/data/owid-covid-data.csv",
+     na.strings = "",header=T)
+
+
+# Drop data that lacks gdp_per_capita
+df %>% filter(!is.na(gdp_per_capita)) -> df
+
+# Look at GDP per capita for the countries included in the data set
+df %>% select(iso_code, location, continent, gdp_per_capita) %>% distinct() -> countries
+
+# Create a fake variable representing silver imports for each country
+# This variable will be generated assuming silver imports correlate with gdp per capita
+countries %>% mutate(ag_import = rnorm(nrow(countries), mean = 1, sd = 0.3) * countries$gdp_per_capita) -> countries
+
+# Model
+df %>% group_by(iso_code) %>% summarise(all_cases = max(total_cases, na.rm = TRUE)) %>% filter(!is.infinite(all_cases)) -> cases
+my_data <- inner_join(countries, cases, by = "iso_code")
+
+
+# Model including only European countries
+model_data <- filter(my_data, continent == "Europe")
+
+lm.1 <- lm(all_cases ~ ag_import, model_data)
+summary(lm.1)
+
+# One of the most overt ways to cherry pick your data is to plot it and remove points that do not fit your hypothesis 
+# (usually people justify this by calling the points they remove "outliers")
+model_data %>% ggplot(aes(x = ag_import, y = all_cases, label = iso_code)) + geom_point() + theme_bw() + geom_text_repel()
+
+
+# Looks like Luxembourg (LUX), San Marino (SMR), Norway (NOR), and Ireland (IRL) don't follow the trend we predict
+# Let's just call them outliers and remove them.
+model_data %>% filter(iso_code != "LUX", iso_code != "SMR", iso_code != "NOR", iso_code != "IRL") -> model_subset
+
+lm.2 <- lm(all_cases ~ ag_import, model_subset)
+summary(lm.2)
+# Wow! Look how significant this trend is. p-value = 0.0005175
+# This shows that European countries that import more silver have more covid cases. 
+
+model_subset %>% ggplot(aes(x = ag_import, y = all_cases, label = iso_code)) + geom_point() + theme_bw() + geom_text_repel() 
+
+```
+
+
+
+European countries that import more silver show an increase in Covid-19 infection. This trend can be easily described by an increase in goods exchange. Silver is frequently sold within jewelry, houseware, and art showrooms. High value sales, such as those of silver, foster an increase in consumer contact; hence, increasing person-to-person contact and Covid-19.
+
+
+
+
+
+
+
+
+
